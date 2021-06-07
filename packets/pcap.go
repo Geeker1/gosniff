@@ -1,7 +1,6 @@
-package main
+package packets
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -33,8 +32,12 @@ func setDeviceNameFromOperatingSystem() string {
 	return deviceName
 }
 
+func FindAllDevices() ([]pcap.Interface, error) {
+	return pcap.FindAllDevs()
+}
+
 func checkForDevice(device string) bool {
-	devs, err := pcap.FindAllDevs()
+	devs, err := FindAllDevices()
 	if err != nil {
 		log.Fatal("Error occured while fetching devices")
 	}
@@ -47,21 +50,23 @@ func checkForDevice(device string) bool {
 	return false
 }
 
-func getPacketData(packet gopacket.Packet) {
+func getPacketData(packet gopacket.Packet) gopacket.Packet {
 	app := packet.ApplicationLayer()
 	if app != nil {
 		// payload := app.Payload()
-		dst := packet.NetworkLayer().NetworkFlow().Dst()
-		src := packet.NetworkLayer().NetworkFlow().Src()
-		// appPayload := packet.ApplicationLayer().Payload()
-		fmt.Print("Destination : ->", dst)
-		fmt.Print("Source: -> ", src)
-		// fmt.Print(string(appPayload))
+		packet.NetworkLayer().NetworkFlow().Dst().Raw()
+		// src := packet.NetworkLayer().NetworkFlow().Src()
+		// // appPayload := packet.ApplicationLayer().Payload()
+		// fmt.Print("Destination : ->", dst)
+		// fmt.Print("Source: -> ", src)
+		// // fmt.Print(string(appPayload))
+		return packet
 	}
+	return nil
 }
 
-func main() {
-	deviceName := setDeviceNameFromOperatingSystem()
+func StartPacketSniffing(deviceName string, channel chan gopacket.Packet) {
+	// deviceName := setDeviceNameFromOperatingSystem()
 	deviceExists := checkForDevice(deviceName)
 	if deviceExists == false {
 		log.Fatal("Device not found, the interface to listen on wasnt found", deviceName)
@@ -80,7 +85,7 @@ func main() {
 
 	source := gopacket.NewPacketSource(handler, handler.LinkType())
 	for packet := range source.Packets() {
-		getPacketData(packet)
+		log.Println(packet)
+		channel <- getPacketData(packet)
 	}
-
 }
