@@ -53,13 +53,6 @@ func checkForDevice(device string) bool {
 func getPacketData(packet gopacket.Packet) gopacket.Packet {
 	app := packet.ApplicationLayer()
 	if app != nil {
-		// payload := app.Payload()
-		packet.NetworkLayer().NetworkFlow().Dst().Raw()
-		// src := packet.NetworkLayer().NetworkFlow().Src()
-		// // appPayload := packet.ApplicationLayer().Payload()
-		// fmt.Print("Destination : ->", dst)
-		// fmt.Print("Source: -> ", src)
-		// // fmt.Print(string(appPayload))
 		return packet
 	}
 	return nil
@@ -85,7 +78,6 @@ func StartPacketSniffing(deviceName string, channel chan gopacket.Packet) {
 
 	source := gopacket.NewPacketSource(handler, handler.LinkType())
 	for packet := range source.Packets() {
-		log.Println(packet)
 		channel <- getPacketData(packet)
 	}
 }

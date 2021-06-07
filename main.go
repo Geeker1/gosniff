@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"gosniff/json"
 	"gosniff/packets"
 	"log"
@@ -22,7 +21,13 @@ type PacketsData struct {
 	Src string
 }
 
+type JsonMessage struct {
+	Message string
+}
+
 var packetChan = make(chan gopacket.Packet)
+var c = make(chan string)
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -52,22 +57,11 @@ func startSniffer(w http.ResponseWriter, r *http.Request) {
 	json.GetJson(r, &chosenInterfaces)
 
 	for _, i := range chosenInterfaces {
-		packets.StartPacketSniffing(i, packetChan)
-		// packet := <-packetChan
+		go packets.StartPacketSniffing(i, packetChan)
+	}
 
-		// if packet == nil {
-		// 	json.SendJson(w, PacketsData{})
-		// 	return
-		// }
-
-		// result := PacketsData{
-		// 	Dst: packet.NetworkLayer().NetworkFlow().Dst().String(),
-		// 	Src: packet.NetworkLayer().NetworkFlow().Src().String(),
-		// }
-
-		// if err := json.SendJson(w, result); err != nil {
-		// 	log.Panic(err)
-		// }
+	if <-c == "kill" {
+		log.Fatal("Kill message recieved")
 	}
 }
 
@@ -78,24 +72,30 @@ func recievePackets(w http.ResponseWriter, r *http.Request) {
 		packet := <-packetChan
 
 		if packet == nil {
-			msg := []byte(fmt.Sprintf("%v", PacketsData{}))
-			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-				log.Panic(err)
-				return
+			// msg := []byte(fmt.Sprintf("%v", PacketsData{}))
+			// if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			// 	log.Panic(err)
+			// 	return
+			// }
+			log.Println("Empty packet")
+		}
+
+		if packet != nil {
+			result := PacketsData{
+				Dst: packet.NetworkLayer().NetworkFlow().Dst().String(),
+				Src: packet.NetworkLayer().NetworkFlow().Src().String(),
 			}
-			return
-		}
 
-		result := PacketsData{
-			Dst: packet.NetworkLayer().NetworkFlow().Dst().String(),
-			Src: packet.NetworkLayer().NetworkFlow().Src().String(),
+			// conn.WriteMessage(1, []byte(fmt.Sprintf("%v", result)))
+			conn.WriteJSON(result)
 		}
-
-		conn.WriteJSON(result)
 	}
-	// if err := json.SendJson(w, result); err != nil {
-	// 	log.Panic(err)
-	// }
+}
+
+func killPackets(w http.ResponseWriter, r *http.Request) {
+	log.Println("Recieve kill signal")
+	c <- "kill"
+	json.SendJson(w, JsonMessage{ Message: "Done" })
 }
 
 func main() {
@@ -108,6 +108,7 @@ func main() {
 	r.HandleFunc("/active-interfaces", getActiveInterfaces).Methods("GET")
 	r.HandleFunc("/start-sniffer", startSniffer).Methods("POST")
 	r.HandleFunc("/recieve-packets", recievePackets).Methods("GET")
+	r.HandleFunc("/kill-packets", killPackets).Methods("POST")
 
 	log.Println("Application listening on port ", port)
 	http.ListenAndServe(":"+port, r)
