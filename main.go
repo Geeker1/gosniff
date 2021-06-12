@@ -26,6 +26,7 @@ type JsonMessage struct {
 }
 
 var packetChan = make(chan gopacket.Packet)
+var dnsChan = make(chan packets.DNS_DATA)
 var c = make(chan string)
 
 var upgrader = websocket.Upgrader{
@@ -56,7 +57,6 @@ func startSniffer(w http.ResponseWriter, r *http.Request) {
 	var chosenInterfaces []string
 	json.GetJson(r, &chosenInterfaces)
 
-	json.SendJson(w, JsonMessage{Message: "Recieved"})
 
 	for _, i := range chosenInterfaces {
 		go packets.StartPacketSniffing(i, packetChan)
@@ -65,6 +65,8 @@ func startSniffer(w http.ResponseWriter, r *http.Request) {
 	if <-c == "kill" {
 		log.Println("Kill message recieved... stopped packet sniffing")
 	}
+
+	json.SendJson(w, JsonMessage{Message: "Recieved"})
 }
 
 func recievePackets(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +102,34 @@ func killPackets(w http.ResponseWriter, r *http.Request) {
 	json.SendJson(w, JsonMessage{Message: "Done"})
 }
 
+func recieveDNSPackets(w http.ResponseWriter, r *http.Request) {
+	log.Println("Process DNS questions")
+
+	conn, _ := upgrader.Upgrade(w, r, nil)
+
+	for {
+		dnsData := <- dnsChan
+
+		conn.WriteJSON(dnsData)
+	}
+
+}
+
+func startDNSSniffing(w http.ResponseWriter, r *http.Request) {
+	var chosenInterfaces []string
+	json.GetJson(r, &chosenInterfaces)
+
+	for _, i := range chosenInterfaces {
+		go packets.GetDNSPackets(i, dnsChan)
+	}
+
+	if <-c == "kill" {
+		log.Println("Kill message recieved... stopped packet sniffing")
+	}
+
+	json.SendJson(w, JsonMessage{Message: "Done"})
+}
+
 func main() {
 	port := *flag.String("port", "8080", "Application port")
 	flag.Parse()
@@ -111,6 +141,8 @@ func main() {
 	r.HandleFunc("/start-sniffer", startSniffer).Methods("POST")
 	r.HandleFunc("/recieve-packets", recievePackets).Methods("GET")
 	r.HandleFunc("/kill-packets", killPackets).Methods("POST")
+	r.HandleFunc("/start-dns", startDNSSniffing).Methods("POST")
+	r.HandleFunc("/listen-dns", recieveDNSPackets).Methods("GET")
 
 	log.Println("Application listening on port ", port)
 	http.ListenAndServe(":"+port, r)
