@@ -56,12 +56,14 @@ func startSniffer(w http.ResponseWriter, r *http.Request) {
 	var chosenInterfaces []string
 	json.GetJson(r, &chosenInterfaces)
 
+	json.SendJson(w, JsonMessage{Message: "Recieved"})
+
 	for _, i := range chosenInterfaces {
 		go packets.StartPacketSniffing(i, packetChan)
 	}
 
 	if <-c == "kill" {
-		log.Fatal("Kill message recieved")
+		log.Println("Kill message recieved... stopped packet sniffing")
 	}
 }
 
@@ -95,7 +97,7 @@ func recievePackets(w http.ResponseWriter, r *http.Request) {
 func killPackets(w http.ResponseWriter, r *http.Request) {
 	log.Println("Recieve kill signal")
 	c <- "kill"
-	json.SendJson(w, JsonMessage{ Message: "Done" })
+	json.SendJson(w, JsonMessage{Message: "Done"})
 }
 
 func main() {
