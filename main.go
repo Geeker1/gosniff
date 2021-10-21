@@ -2,12 +2,11 @@ package main
 
 import (
 	"flag"
-	"gosniff/json"
-	"gosniff/packets"
 	"log"
 	"net/http"
 
-	"github.com/google/gopacket"
+	"github.com/Geeker1/gosniff/json"
+	"github.com/Geeker1/gosniff/packets"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
@@ -16,16 +15,11 @@ type ChosenInterface struct {
 	DeviceName string
 }
 
-type PacketsData struct {
-	Dst string
-	Src string
-}
-
 type JsonMessage struct {
 	Message string
 }
 
-var packetChan = make(chan gopacket.Packet)
+var packetChan = make(chan packets.PacketsData)
 var c = make(chan string)
 
 var upgrader = websocket.Upgrader{
@@ -38,7 +32,8 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 }
 
 func getActiveInterfaces(w http.ResponseWriter, r *http.Request) {
-	devs, err := packets.FindAllDevices()
+	pcapHandler := &packets.PcapHandler{}
+	devs, err := pcapHandler.FindAllDevs()
 	if err != nil {
 		log.Panic(err)
 	}
@@ -58,8 +53,12 @@ func startSniffer(w http.ResponseWriter, r *http.Request) {
 
 	json.SendJson(w, JsonMessage{Message: "Recieved"})
 
+	pcapHandler := &packets.PcapHandler{}
+	pcapMessage := &packets.SniffMessage{
+		Message: packetChan,
+	}
 	for _, i := range chosenInterfaces {
-		go packets.StartPacketSniffing(i, packetChan)
+		go packets.StartPacketSniffing(pcapHandler, i, pcapMessage)
 	}
 
 	if <-c == "kill" {
@@ -73,24 +72,8 @@ func recievePackets(w http.ResponseWriter, r *http.Request) {
 	for {
 		packet := <-packetChan
 
-		if packet == nil {
-			// msg := []byte(fmt.Sprintf("%v", PacketsData{}))
-			// if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			// 	log.Panic(err)
-			// 	return
-			// }
-			log.Println("Empty packet")
-		}
-
-		if packet != nil {
-			result := PacketsData{
-				Dst: packet.NetworkLayer().NetworkFlow().Dst().String(),
-				Src: packet.NetworkLayer().NetworkFlow().Src().String(),
-			}
-
-			// conn.WriteMessage(1, []byte(fmt.Sprintf("%v", result)))
-			conn.WriteJSON(result)
-		}
+		// conn.WriteMessage(1, []byte(fmt.Sprintf("%v", result)))
+		conn.WriteJSON(packet)
 	}
 }
 
