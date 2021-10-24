@@ -27,10 +27,6 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func handleHome(w http.ResponseWriter, r *http.Request) {
-	json.SendJson(w, "Working root endppoint of the packet sniffer")
-}
-
 func getActiveInterfaces(w http.ResponseWriter, r *http.Request) {
 	pcapHandler := &packets.PcapHandler{}
 	devs, err := pcapHandler.FindAllDevs()
@@ -49,9 +45,15 @@ func getActiveInterfaces(w http.ResponseWriter, r *http.Request) {
 
 func startSniffer(w http.ResponseWriter, r *http.Request) {
 	var chosenInterfaces []string
-	json.GetJson(r, &chosenInterfaces)
 
-	json.SendJson(w, JsonMessage{Message: "Recieved"})
+	conn, _ := upgrader.Upgrade(w, r, nil)
+
+	err := conn.ReadJSON(&chosenInterfaces)
+
+	if err != nil {
+		log.Println("Error reading JSON from connection.", err)
+		conn.Close()
+	}
 
 	pcapHandler := &packets.PcapHandler{}
 	pcapMessage := &packets.SniffMessage{
@@ -61,26 +63,10 @@ func startSniffer(w http.ResponseWriter, r *http.Request) {
 		go packets.StartPacketSniffing(pcapHandler, i, pcapMessage)
 	}
 
-	if <-c == "kill" {
-		log.Println("Kill message recieved... stopped packet sniffing")
-	}
-}
-
-func recievePackets(w http.ResponseWriter, r *http.Request) {
-	conn, _ := upgrader.Upgrade(w, r, nil)
-
 	for {
 		packet := <-packetChan
-
-		// conn.WriteMessage(1, []byte(fmt.Sprintf("%v", result)))
 		conn.WriteJSON(packet)
 	}
-}
-
-func killPackets(w http.ResponseWriter, r *http.Request) {
-	log.Println("Recieve kill signal")
-	c <- "kill"
-	json.SendJson(w, JsonMessage{Message: "Done"})
 }
 
 func main() {
@@ -89,11 +75,8 @@ func main() {
 
 	r := mux.NewRouter()
 
-	r.HandleFunc("/", handleHome).Methods("GET")
 	r.HandleFunc("/active-interfaces", getActiveInterfaces).Methods("GET")
-	r.HandleFunc("/start-sniffer", startSniffer).Methods("POST")
-	r.HandleFunc("/recieve-packets", recievePackets).Methods("GET")
-	r.HandleFunc("/kill-packets", killPackets).Methods("POST")
+	r.HandleFunc("/start-sniffer", startSniffer)
 
 	log.Println("Application listening on port ", port)
 	http.ListenAndServe(":"+port, r)
