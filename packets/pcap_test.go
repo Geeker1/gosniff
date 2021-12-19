@@ -3,6 +3,7 @@ package packets
 import (
 	"testing"
 
+	"github.com/Geeker1/gosniff/decoder"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 )
@@ -35,11 +36,11 @@ func (pH *PcapHandlerTest) createPacketSource(handler *pcap.Handle) *gopacket.Pa
 	return &gopacket.PacketSource{}
 }
 
-func (pH *PcapHandlerTest) getPacketData(packet gopacket.Packet) PacketsData {
-	return PacketsData{
-		Dst: "192.168.0.0.1",
-		Src: "193.553.6.7.1",
-	}
+func (pH *PcapHandlerTest) getPacketData(packet gopacket.Packet) (decoder.PacketData, error) {
+	return decoder.PacketData{
+		// Dst: "192.168.0.0.1",
+		// Src: "193.553.6.7.1",
+	}, nil
 }
 
 func TestCheckForDevice(t *testing.T) {

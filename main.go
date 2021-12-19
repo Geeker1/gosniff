@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/Geeker1/gosniff/decoder"
 	"github.com/Geeker1/gosniff/json"
 	"github.com/Geeker1/gosniff/packets"
 	"github.com/gorilla/mux"
@@ -19,7 +20,7 @@ type JsonMessage struct {
 	Message string
 }
 
-var packetChan = make(chan packets.PacketsData)
+var packetChan = make(chan decoder.PacketData)
 var c = make(chan string)
 
 var upgrader = websocket.Upgrader{

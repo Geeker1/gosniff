@@ -7,22 +7,19 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
+	"github.com/Geeker1/gosniff/decoder"
 )
 
 type PcapMethods interface {
 	FindAllDevs() ([]pcap.Interface, error)
 	OpenLiveConnection(deviceName string) (*pcap.Handle, error)
 	createPacketSource(handler *pcap.Handle) *gopacket.PacketSource
-	getPacketData(packet gopacket.Packet) PacketsData
+	getPacketData(packet gopacket.Packet) (decoder.PacketData, error)
 	startSniffing(handler *pcap.Handle, p PcapMethods, message *SniffMessage)
 }
 
 type SniffMessage struct {
-	Message chan PacketsData
-}
-type PacketsData struct {
-	Dst string
-	Src string
+	Message chan decoder.PacketData
 }
 
 type PcapHandler struct{}
@@ -101,20 +98,15 @@ func (pH *PcapHandler) startSniffing(handler *pcap.Handle, p PcapMethods, messag
 
 	source := p.createPacketSource(handler)
 	for packet := range source.Packets() {
-		message.Message <- p.getPacketData(packet)
+		packetData, err := p.getPacketData(packet)
+		if err == nil {
+			message.Message <- packetData
+		}
 	}
 }
 
-func (pH *PcapHandler) getPacketData(packet gopacket.Packet) PacketsData {
-	app := packet.ApplicationLayer()
-	if app != nil {
-		return PacketsData{
-			Dst: packet.NetworkLayer().NetworkFlow().Dst().String(),
-			Src: packet.NetworkLayer().NetworkFlow().Src().String(),
-		}
-	}
-
-	return PacketsData{}
+func (pH *PcapHandler) getPacketData(packet gopacket.Packet) (decoder.PacketData, error) {
+	return decoder.DecodePacket(packet)
 }
 
 func (pH *PcapHandler) createPacketSource(handler *pcap.Handle) *gopacket.PacketSource {
